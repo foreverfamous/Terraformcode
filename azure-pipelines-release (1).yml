@@ -1,0 +1,35 @@
+trigger: none
+
+stages:
+- template: 'templates/deployment.yml'
+  parameters:
+    agent_pool_name: 'ubuntu-latest'
+    deployment_environment: 'Development'
+    azure_resource_manager_connection: 'ADO Connection to UK EWT Engineering Support'
+    project_id: 'c87302c7-ffbd-4d51-8e80-5b57ffa46d40'
+    artifact_published_pipeline_id: '8'
+    publish_artifact_name: 'drop'
+    tf_az_backend_resource_group_name: 'tf-azure-templates'
+    tf_az_backend_storage_account_name: 'templatestfstate31908'
+    tf_az_backend_container_name: 'development'
+    tf_az_backend_state_file_name: 'development-terraform.tfstate'
+    tf_variables: |
+                -var 'resource_group_name_index=0001' \
+                -var 'virtual_network_name_index=001' \
+                -var 'virtual_network_address_space=["10.4.0.0/16"]'
+- template: 'templates/deployment.yml'
+  parameters:
+    agent_pool_name: 'ubuntu-latest'
+    deployment_environment: 'Production'
+    azure_resource_manager_connection: 'ADO Connection to UK EWT Engineering Support'
+    project_id: 'c87302c7-ffbd-4d51-8e80-5b57ffa46d40'
+    artifact_published_pipeline_id: '8'
+    publish_artifact_name: 'drop'
+    tf_az_backend_resource_group_name: 'tf-azure-templates'
+    tf_az_backend_storage_account_name: 'templatestfstate31908'
+    tf_az_backend_container_name: 'production'
+    tf_az_backend_state_file_name: 'production-terraform.tfstate'
+    tf_variables: |
+                -var 'resource_group_name_index=0002' \
+                -var 'virtual_network_name_index=002' \
+                -var 'virtual_network_address_space=["10.5.0.0/16"]'

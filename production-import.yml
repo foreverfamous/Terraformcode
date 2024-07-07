@@ -1,0 +1,37 @@
+trigger:
+  none # Pipeline will not trigger automatically
+pr:
+  none # Pipeline will not trigger for pull requests
+
+resources:
+  pipelines:
+  - pipeline: build # Identifier for the resource (used in pipeline resource variables)
+    source: \ewt-kbs-poppulo-infra/Poppulo-Infra-CI/staging/poppulo-kbs-staging-ci # Name of the pipeline that produces an artifact
+  repositories:
+  - repository: templates
+    type: github
+    name: KPMG-UK/ewt-engineering-azure-infrastructure-template # The resources section with the repositories block enables the pipeline to access and utilize specific resources from a GitHub repository, such as templates and necessary files
+    ref: 'fix/self-hosted-pool' # Branch name of the above repository
+    endpoint: 'EWT Cloud KBS Infra' # GitHub connection to the repository where your code is hosted. It will be added when you create the pipeline and link your repository.
+
+stages:
+- template: .azure-pipelines/templates/import.yml@templates # This line specifies that the pipeline uses a template named import.yml from the templates directory
+  parameters:
+    agent_pool_name: 'KBS-Infra-Pool' # Name of the agent pool where the pipeline job will run
+    deployment_environment: 'Poppulokbsstg' # Name of the deployment environment
+    azure_resource_manager_connection: 'kbs-staging-infra-pipeline-connection' # Name of the Azure service principal connection
+    pipeline_resource: 'build' # Reference to the 'build' pipeline resource
+    publish_artifact_name: 'drop' # Name of the artifact to be published
+    artifact_build_version: $(resources.pipeline.build.runName) # Build version of the artifact
+    release_pipeline_name: $(Build.DefinitionName) # Name of the release pipeline
+    terraform_metadata_tags_file: 'kbs-poppulo-custom-tags-tfvars.cfg' # File containing Terraform metadata tags
+    tf_az_backend_resource_group_name: 'uk-uks-kbs-stg-rg-infra-tfstate' # Name of the Terraform backend resource group
+    tf_az_backend_storage_account_name: 'ukazrstkbsstginfra1000' # Name of the Terraform backend storage account
+    tf_az_backend_container_name: 'infra-terraform-state' # Name of the Terraform backend container
+    tf_az_backend_state_file_name: 'staging-paperchase-infra.tfstate' # Name of the Terraform backend state file
+    tf_az_backend_use_azuread_auth: true 
+    tf_request_file_path: 'requests'
+    tf_restore_access_file: $(INPUT_FILE)
+    tf_variables: |
+                -var-file="./environments/staging/pipeline-tfvars.cfg" \
+                -var-file="kbs-poppulo-custom-tags-tfvars.cfg"

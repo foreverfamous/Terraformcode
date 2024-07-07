@@ -1,0 +1,79 @@
+trigger: none   # This pipeline will not be triggered automatically
+
+variables:
+  poolName: 'kbs-stg-prd'   # Define the name of the pool where the pipeline will be run
+  azureSubscription: 'uk-ewt-kbs-pipeline'   # Set Azure Service principal
+  terraformVersion: '1.4.4'   # Define the version of Terraform to be installed
+  backendConfig:   # Configuration for Terraform backend
+    storage_account_name: 'ukazrstkbsprdtf1010'
+    container_name: 'paperchase-kbs-prd-tfstate-data'
+    key: 'paperchase-kbs-prd-tfstate.tfstate'
+    resource_group_name: 'uk-uks-kbs-prd-rg-shared-tfstate'
+  terraformVarFile: './environments/staging/pipeline-tfvars.cfg'   # Path to the Terraform variable file
+  terraformTarget: 'azurerm_virtual_machine.example-vm'   # Specify the target resource for Terraform destroy
+
+pool:
+  name: $(poolName)   # Use the value of the poolName variable to set the pool name
+
+steps:
+- task: Bash@3   # Define a Bash task
+  displayName: 'Install unzip'
+  inputs:
+    targetType: 'inline'
+    script: |
+      sudo apt-get -y install unzip   # Install unzip using apt-get
+      echo 'installing unzip'   # Log message
+
+- task: Bash@3   # Define a Bash task
+  displayName: 'Install azure cli'
+  inputs:
+    targetType: 'inline'
+    script: 'curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash'   # Install Azure CLI using curl and bash
+
+- task: AzureCLI@2   # Define an Azure CLI task
+  displayName: 'azure service principal authentication'
+  inputs:
+    azureSubscription: $(azureSubscription)   # Set Azure Subscription
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |   # Set environment variables for Azure Subscription
+      echo "##vso[task.setvariable variable=azureSubscriptionId;issecret=true]$(az account show --query id --output tsv)"
+      echo "##vso[task.setvariable variable=azureClientId;]$servicePrincipalId"
+      echo "##vso[task.setvariable variable=azureClientSecret;]$servicePrincipalKey"
+      echo "##vso[task.setvariable variable=azureTenantId;]$tenantId"
+    addSpnToEnvironment: true   # Add service principal (SPN) to the environment
+
+- task: InstallSSHKey@0   # Define a task to install SSH key
+  displayName: 'configure github deploy keys (terraform-private-modules)'
+  inputs:
+    knownHostsEntry: $(KnownHostsEntry)   # Specify the known hosts entry for GitHub
+    sshKeySecureFile: id_ed25519   # Specify the secure file for the SSH key
+
+- script: 'ssh-keyscan -H github.com >> ~/.ssh/known_hosts'   # Add GitHub to known hosts
+  displayName: 'Add github to known hosts'
+
+- task: TerraformInstaller@0   # Define a task to install Terraform
+  displayName: 'install terraform'
+  inputs:
+    terraformVersion: $(terraformVersion)   # Specify the version of Terraform to be installed
+
+- task: Bash@3   # Define a Bash task
+  displayName: 'replace terraform modules type with ssh'
+  inputs:
+    targetType: 'inline'
+    script: |
+      find . -type f -name "*.tf" -exec sed -i 's|github.com/KPMG-UK|git@github.com:KPMG-UK|g' {} +   # Find and replace Github URL to SSH in all *.tf files
+
+- task: Bash@3   # Define a Bash task
+  displayName: 'initialise terraform backend'
+  inputs:
+    targetType: 'inline'
+    script: 'terraform init -backend-config=storage_account_name=$(backendConfig.storage_account_name) -backend-config=container_name=$(backendConfig.container_name) -backend-config=key=$(backendConfig.key) -backend-config=resource_group_name=$(backendConfig.resource_group_name) -backend-config=subscription_id=$(azureSubscriptionId) -backend-config=tenant_id=$(azureTenantId) -backend-config=client_id=$(azureClientId) -backend-config=client_secret=$(azureClientSecret)'   # Initialize Terraform backend with the specified configuration
+
+- script: 'terraform destroy -var-file=$(terraformVarFile) -target=$(terraformTarget)'   # Run Terraform destroy command
+  displayName: 'terraform destroy'
+  env:
+    ARM_CLIENT_ID: $(azureClientId)   # Pass environment variables for Terraform destroy command
+    ARM_CLIENT_SECRET: $(azureClientSecret)
+    ARM_SUBSCRIPTION_ID: $(azureSubscriptionId)
+    ARM_TENANT_ID: $(azureTenantId)

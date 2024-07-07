@@ -1,0 +1,11 @@
+trigger:
+- main
+
+jobs:
+- template: 'templates/build.yml'
+  parameters:
+    agent_pool_name: 'ubuntu-latest'
+    publish_artifact_contents: |
+                              .terraform.lock.hcl
+                              *.tf
+                              modules/**
